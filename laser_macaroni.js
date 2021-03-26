@@ -137,6 +137,31 @@ var macaroni = {
         svgbox.append(this.draw_tile(0, 4))
         svgbox.append(this.draw_tile(0, 5))
         svgbox.append(this.draw_tile(0, 6))
+
+        for (i of Array(7).keys()){
+            this.draw_point()
+        }
+    },
+
+    draw_point: function(){
+        var vx = this.vx()
+        var vy = this.vy()
+        var ux = this.ux()
+        var uy = this.uy()
+        var size = this.size
+
+        var cu = Math.floor(Math.random() * 10) + 1
+        var cv = Math.floor(Math.random() * 10) + 1
+        const svgbox = document.getElementById("svgbox_macaroni");
+
+        //d = `cx=${cu * ux + cv * vx} cy=${cu * uy + cv * vy} r=5`
+        point = document.createElementNS("http://www.w3.org/2000/svg", "circle")
+        point.setAttributeNS(null, "style", `fill:#00ff00;stroke:#000000;stroke-width:0.1px`)
+        //point.setAttributeNS(null, "circle", d)
+        point.setAttributeNS(null, "cx", cu * ux + cv * vx)
+        point.setAttributeNS(null, "cy", cu * uy + cv * vy)
+        point.setAttributeNS(null, "r", 5)
+        svgbox.appendChild(point)
     },
 
     draw_tile: function(i, j){
