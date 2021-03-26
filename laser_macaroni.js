@@ -13,31 +13,38 @@ var macaroni = {
     angle2deltas: {0:  [1, 0], 1: [1, -1], 2: [0, -1],
                    3: [-1, 0], 4: [-1, 1], 5: [0,  1]},
     hexes: [],
+    is_mobile_func: function() {return ('ontouchstart' in document.documentElement) },
+    is_mobile: false,
 
     make_draggable: function(event){
         var svg = event.target
         svg.addEventListener("mousedown", start_drag)
-        svg.addEventListener("contextmenu", start_drag)
+        svg.addEventListener("touchstart", start_drag)
+        svg.addEventListener("contextmenu", nothing)
         svg.addEventListener("mousemove", drag)
+        svg.addEventListener("touchmove", drag)
         svg.addEventListener("mouseup", end_drag)
         svg.addEventListener("mouseleave", end_drag)
-
+        svg.addEventListener("touchend", end_drag)
         var elem = false
         var offsets = false
+        var last_click_time_ms = 0
+        this.is_mobile = this.is_mobile_func()
 
         this.draw_grid()
         this.spawn()
         this.draw_laser()
 
+        function nothing(event){
+            event.preventDefault()
+        }
+
         function start_drag(event){
+            console.log("start drag")
             event.preventDefault();
             if (event.target.classList.contains("draggable")){
 
-                if (event.button == 0){
-                    // left click
-                    elem = event.target.parentElement
-                    offset = get_offset(elem, event)
-                }else if (event.button == 1){
+                if (event.button == 1 || event.button == 2 || event.timeStamp < last_click_time_ms + 350){
                     // mouse wheel click
                     var target = event.target.parentElement
                     if (!target.classList.contains("hex")){
@@ -60,30 +67,48 @@ var macaroni = {
                     id = parseInt(target.getAttributeNS(null, "id"))
                     macaroni.hexes[id][2] = (macaroni.hexes[id][2] + delta/60 + 6) % 6
                     macaroni.draw_laser()
+                    last_click_time_ms = event.timeStamp
+                } else if (event.button == 0 || event.type == "touchstart"){
+                    // left click
+                    elem = this.is_mobile ? event.target : event.target.parentElement
+                    offset = get_offset(elem, event)
+                    last_click_time_ms = event.timeStamp
+                    console.log(event)
                 }
             }
         }
 
         function drag(event){
+            console.log("drag")
             if (elem){
                 event.preventDefault()
                 var coord = get_mouse_position(event)
                 coord = macaroni.hexgrid_rounding(coord.x, coord.y)
                 elem.setAttributeNS(null, "x", parseInt(coord.x - macaroni.vx() / 2 + 0.5))
                 elem.setAttributeNS(null, "y", parseInt(coord.y - macaroni.uy() + 0.5))
+                elem.setAttributeNS(null, "coord_u", coord.coord_u)
+                elem.setAttributeNS(null, "coord_v", coord.coord_v)
             }
         }
 
         function end_drag(event){
+            console.log("end drag")
+            console.log(elem)
             if (elem){
                 event.preventDefault()
-                var coord = get_mouse_position(event)
-                coord = macaroni.hexgrid_rounding(coord.x, coord.y)
-                elem.setAttributeNS(null, "x", parseInt(coord.x - macaroni.vx() / 2 + 0.5))
-                elem.setAttributeNS(null, "y", parseInt(coord.y - macaroni.uy() + 0.5))
-
+                if (macaroni.is_mobile){
+                    coord = { x: elem.getAttributeNS(null, "x"),
+                              y: elem.getAttributeNS(null, "y"),
+                              coord_u: elem.getAttributeNS(null, "coord_u"),
+                              coord_v: elem.getAttributeNS(null, "coord_v")
+                            }
+                } else{
+                    var coord = get_mouse_position(event)
+                    coord = macaroni.hexgrid_rounding(coord.x, coord.y)
+                    elem.setAttributeNS(null, "x", parseInt(coord.x - macaroni.vx() / 2 + 0.5))
+                    elem.setAttributeNS(null, "y", parseInt(coord.y - macaroni.uy() + 0.5))
+                }
                 var id = parseInt(elem.getAttributeNS(null, "id"))
-                console.log(id)
                 macaroni.hexes[id][0] = coord.coord_u
                 macaroni.hexes[id][1] = coord.coord_v
                 elem = false
@@ -98,10 +123,12 @@ var macaroni = {
         }
 
         function get_mouse_position(event){
+            var coord_x = macaroni.is_mobile ? event.touches[0].clientX : event.x
+            var coord_y = macaroni.is_mobile ? event.touches[0].clientY : event.y
             var CTM = svg.getScreenCTM();
             return {
-                x: (event.x - CTM.e) / CTM.a,
-                y: (event.y - CTM.f) / CTM.d
+                x: (coord_x - CTM.e) / CTM.a,
+                y: (coord_y - CTM.f) / CTM.d
             }
         }
     },
@@ -120,8 +147,8 @@ var macaroni = {
         Ainv21 = 1/Math.sqrt(3) / size
         Ainv22 = -1/3 / size
 
-        coord_u = parseInt( Ainv11 * x + Ainv12 * y + 0.5)
-        coord_v = parseInt( Ainv21 * x + Ainv22 * y + 0.5)
+        coord_u = Math.floor( Ainv11 * x + Ainv12 * y + 0.5)
+        coord_v = Math.floor( Ainv21 * x + Ainv22 * y + 0.5)
 
         return { x: coord_u * ux + coord_v * vx,
                  y: coord_u * uy + coord_v * vy,
@@ -138,7 +165,7 @@ var macaroni = {
         svgbox.append(this.draw_tile(0, 5))
         svgbox.append(this.draw_tile(0, 6))
 
-        for (i of Array(7).keys()){
+        for (i of Array(8).keys()){
             this.draw_point()
         }
     },
@@ -150,8 +177,11 @@ var macaroni = {
         var uy = this.uy()
         var size = this.size
 
-        var cu = Math.floor(Math.random() * 10) + 1
-        var cv = Math.floor(Math.random() * 10) + 1
+        var width = 8
+        var margin = 4
+
+        var cu = Math.floor(Math.random() * width) + margin
+        var cv = Math.floor((Math.random() - cu / width / 2 ) * width ) + margin
         const svgbox = document.getElementById("svgbox_macaroni");
 
         //d = `cx=${cu * ux + cv * vx} cy=${cu * uy + cv * vy} r=5`
