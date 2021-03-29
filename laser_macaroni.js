@@ -13,6 +13,7 @@ var macaroni = {
     angle2deltas: {0:  [1, 0], 1: [1, -1], 2: [0, -1],
                    3: [-1, 0], 4: [-1, 1], 5: [0,  1]},
     hexes: [],
+    checkpoints: [],
     is_mobile_func: function() {return ('ontouchstart' in document.documentElement) },
     is_mobile: false,
 
@@ -40,7 +41,6 @@ var macaroni = {
         }
 
         function start_drag(event){
-            console.log("start drag")
             event.preventDefault();
             if (event.target.classList.contains("draggable")){
 
@@ -73,13 +73,11 @@ var macaroni = {
                     elem = this.is_mobile ? event.target : event.target.parentElement
                     offset = get_offset(elem, event)
                     last_click_time_ms = event.timeStamp
-                    console.log(event)
                 }
             }
         }
 
         function drag(event){
-            console.log("drag")
             if (elem){
                 event.preventDefault()
                 var coord = get_mouse_position(event)
@@ -92,8 +90,6 @@ var macaroni = {
         }
 
         function end_drag(event){
-            console.log("end drag")
-            console.log(elem)
             if (elem){
                 event.preventDefault()
                 if (macaroni.is_mobile){
@@ -182,6 +178,8 @@ var macaroni = {
 
         var cu = Math.floor(Math.random() * width) + margin
         var cv = Math.floor((Math.random() - cu / width / 2 ) * width ) + margin
+        this.checkpoints.push(`${cu} ${cv}`)
+
         const svgbox = document.getElementById("svgbox_macaroni");
 
         //d = `cx=${cu * ux + cv * vx} cy=${cu * uy + cv * vy} r=5`
@@ -266,34 +264,40 @@ var macaroni = {
         var cu = 0
         var cv = 0
         var angle = 0
+        var won = false
+
+        checked_points = new Set(this.checkpoints)
 
         while(true){
             delta_u = this.angle2deltas[angle][0]
             delta_v = this.angle2deltas[angle][1]
-            res = this.find_next_turn(cu, cv, delta_u, delta_v, angle)
+            res = this.find_next_turn(cu, cv, delta_u, delta_v, angle, checked_points)
             if (res == null){
                 cu = cu + delta_u * inf
                 cv = cv + delta_v * inf
                 d += `\nL ${cu * ux + cv * vx} ${cu * uy + cv * vy}`
                 break
+            }
+            checked_points = res.checked
+            if (checked_points.size == 0 ){
+                won = true
+            }            
+            cu = res.cu
+            cv = res.cv
+            edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
+                     cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
+            sweep = res.angle == (angle + 4) % 6 ? 0 : 1
+            angle = res.angle
+            if (res.dead){
+                d += `\nL ${edge1[0]} ${edge1[1]}`
+                break
             } else{
-                cu = res.cu
-                cv = res.cv
-                edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
-                         cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
-                sweep = res.angle == (angle + 4) % 6 ? 0 : 1
-                angle = res.angle
-                if(res.dead){
-                    d += `\nL ${edge1[0]} ${edge1[1]}`
-                    break
-                }else{
-                    delta_u = this.angle2deltas[angle][0]
-                    delta_v = this.angle2deltas[angle][1]
-                    edge2 = [cu * ux + cv * vx + delta_u * ux / 2 + delta_v * vx / 2, 
-                             cu * uy + cv * vy + delta_u * uy / 2 + delta_v * vy / 2]
-                    d += `\nL ${edge1[0]} ${edge1[1]} 
-                            A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
-                }
+                delta_u = this.angle2deltas[angle][0]
+                delta_v = this.angle2deltas[angle][1]
+                edge2 = [cu * ux + cv * vx + delta_u * ux / 2 + delta_v * vx / 2, 
+                         cu * uy + cv * vy + delta_u * uy / 2 + delta_v * vy / 2]
+                d += `\nL ${edge1[0]} ${edge1[1]} 
+                        A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
             }
         }
 
@@ -302,7 +306,8 @@ var macaroni = {
         path.setAttributeNS(null, "class", "drawable line")
         path.setAttributeNS(null, "z-index", 0)
         path.setAttributeNS(null, "pointer-events", "none")
-        path.setAttributeNS(null, "style", `fill:none;stroke:#ff0000;stroke-width:5px`)
+        color = won ? "#0000ff" : "#ff0000"
+        path.setAttributeNS(null, "style", `fill:none;stroke:${color};stroke-width:5px`)
         path.setAttributeNS(null, "d", d)
 
         laser.appendChild(path)
@@ -317,7 +322,7 @@ var macaroni = {
         }
     },
 
-    find_next_turn: function(cu, cv, delta_u, delta_v, angle){
+    find_next_turn: function(cu, cv, delta_u, delta_v, angle, checked_points){
         var coord_u = cu
         var coord_v = cv
         var iter = 0
@@ -333,7 +338,8 @@ var macaroni = {
                         return { cu: coord_u,
                                  cv: coord_v,
                                  angle: ang,
-                                 dead: false
+                                 dead: false,
+                                 checked: checked_points
                                }
                     }
                     if (angle == (hex[2] + 3) % 6){
@@ -341,16 +347,19 @@ var macaroni = {
                         return { cu: coord_u,
                                  cv: coord_v,
                                  angle: ang,
-                                 dead: false
+                                 dead: false,
+                                 checked: checked_points
                                }
                     }
                     return { cu: coord_u,
                              cv: coord_v,
                              angle: angle,
-                             dead: true
+                             dead: true,
+                             checked: checked_points
                            }   
                 }
             }
+            checked_points.delete(`${coord_u} ${coord_v}`)
         }
         return null
     },
