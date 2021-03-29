@@ -16,6 +16,7 @@ var macaroni = {
     checkpoints: [],
     is_mobile_func: function() {return ('ontouchstart' in document.documentElement) },
     is_mobile: false,
+    N: function(){return this.is_mobile ? 10 : 15},
 
     make_draggable: function(event){
         var svg = event.target
@@ -27,15 +28,18 @@ var macaroni = {
         svg.addEventListener("mouseup", end_drag)
         svg.addEventListener("mouseleave", end_drag)
         svg.addEventListener("touchend", end_drag)
+
         var elem = false
         var offsets = false
         var last_click_time_ms = 0
         this.is_mobile = this.is_mobile_func()
-
+        const svgbox = document.getElementById("svgbox_macaroni")
+        svgbox.setAttributeNS(null, "viewBox", this.is_mobile ? "0 0 550 450" : "0 0 1000 1000")
+        
         this.draw_grid()
         this.spawn()
         this.draw_laser()
-
+      
         function nothing(event){
             event.preventDefault()
         }
@@ -44,14 +48,12 @@ var macaroni = {
             event.preventDefault();
             if (event.target.classList.contains("draggable")){
 
-                if (event.button == 1 || event.button == 2 || event.timeStamp < last_click_time_ms + 350){
+                if (event.button == 1 || event.button == 2 || event.timeStamp < last_click_time_ms + 500){
                     // mouse wheel click
                     var target = event.target.parentElement
                     if (!target.classList.contains("hex")){
                         target = target.parentElement
                     }
-                    var mid = { x: target.getAttributeNS(null, "x"),
-                                y: target.getAttributeNS(null, "y")}
                     var rot = parseInt(target.getAttributeNS(null, "rotation")) || 0
                     var delta = event.shiftKey ? -60 : 60
                     rot = (rot + delta) % 360
@@ -112,6 +114,7 @@ var macaroni = {
             macaroni.draw_laser()
         }
 
+
         function get_offset(elem, event){
             var coord = get_mouse_position(event)
             return { x: coord.x - elem.getAttributeNS(null, "x"),
@@ -137,6 +140,7 @@ var macaroni = {
         var ux = this.ux()
         var uy = this.uy()
         var size = this.size
+        var N = this.N()
 
         Ainv11 = 0 / size
         Ainv12 = 2/3 / size
@@ -146,6 +150,10 @@ var macaroni = {
         coord_u = Math.floor( Ainv11 * x + Ainv12 * y + 0.5)
         coord_v = Math.floor( Ainv21 * x + Ainv22 * y + 0.5)
 
+        coord_u = Math.min(N, Math.max(1, coord_u))
+        coord_v = Math.min(N-Math.floor(coord_u/2 + 0.5), Math.max(-Math.floor(coord_u/2 - 0.5), coord_v))
+        //coord_u = Math.min(this.N, Math.max(0, coord_u))
+
         return { x: coord_u * ux + coord_v * vx,
                  y: coord_u * uy + coord_v * vy,
                  coord_u: coord_u,
@@ -153,15 +161,15 @@ var macaroni = {
     },
 
     spawn: function(){
-        const svgbox = document.getElementById("svgbox_macaroni");
-        svgbox.append(this.draw_tile(0, 1))
-        svgbox.append(this.draw_tile(0, 2))
-        svgbox.append(this.draw_tile(0, 3))
-        svgbox.append(this.draw_tile(0, 4))
-        svgbox.append(this.draw_tile(0, 5))
-        svgbox.append(this.draw_tile(0, 6))
-
-        for (i of Array(8).keys()){
+        const svgbox = document.getElementById("svgbox_macaroni")
+        var num_macaroni = this.is_mobile ? 4 : 5
+      
+        for (i of Array(num_macaroni).keys()){
+            svgbox.append(this.draw_tile(1, i+1))
+        }
+      
+        var num_points = this.is_mobile ? 5 : 8
+        for (i of Array(num_points).keys()){
             this.draw_point()
         }
     },
@@ -173,8 +181,8 @@ var macaroni = {
         var uy = this.uy()
         var size = this.size
 
-        var width = 8
-        var margin = 4
+        var width = this.is_mobile ? 6 : 8
+        var margin = this.is_mobile ? 2 : 3
 
         var cu = Math.floor(Math.random() * width) + margin
         var cv = Math.floor((Math.random() - cu / width / 2 ) * width ) + margin
@@ -197,10 +205,17 @@ var macaroni = {
         svg.setAttributeNS(null, "class", `draggable hex`)
         var smallest_unused_id = this.hexes.length
         var id = smallest_unused_id
-        this.hexes.push([i, j, 0])
         svg.setAttributeNS(null, "id", id)
-        svg.setAttributeNS(null, "x", this.ux() * i + this.vx() * j)
-        svg.setAttributeNS(null, "y", this.uy() * i + this.vy() * j)
+        const x = this.ux() * i + this.vx() * j
+        const y = this.uy() * i + this.vy() * j
+        //svg.setAttributeNS(null, "x", x)
+        //svg.setAttributeNS(null, "y", y)
+        svg.setAttributeNS(null, "x", parseInt(x - this.vx() / 2 + 0.5))
+        svg.setAttributeNS(null, "y", parseInt(y - this.uy() + 0.5))
+        coord = this.hexgrid_rounding(x, y)
+        this.hexes.push([coord.coord_u, coord_v, 0])
+        svg.setAttributeNS(null, "coord_u", coord_u)
+        svg.setAttributeNS(null, "coord_v", coord_v)
 
         const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon")
         polygon.setAttributeNS(null, "class", `drawable draggable polygon`)
@@ -272,15 +287,15 @@ var macaroni = {
             delta_u = this.angle2deltas[angle][0]
             delta_v = this.angle2deltas[angle][1]
             res = this.find_next_turn(cu, cv, delta_u, delta_v, angle, checked_points)
-            if (res == null){
+            checked_points = res.checked
+            if (checked_points.size == 0 ){
+                won = true
+            }  
+            if (res.cu == null){
                 cu = cu + delta_u * inf
                 cv = cv + delta_v * inf
                 d += `\nL ${cu * ux + cv * vx} ${cu * uy + cv * vy}`
                 break
-            }
-            checked_points = res.checked
-            if (checked_points.size == 0 ){
-                won = true
             }            
             cu = res.cu
             cv = res.cv
@@ -288,16 +303,16 @@ var macaroni = {
                      cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
             sweep = res.angle == (angle + 4) % 6 ? 0 : 1
             angle = res.angle
-            if (res.dead){
+            if(res.dead){
                 d += `\nL ${edge1[0]} ${edge1[1]}`
                 break
-            } else{
+            }else{
                 delta_u = this.angle2deltas[angle][0]
                 delta_v = this.angle2deltas[angle][1]
                 edge2 = [cu * ux + cv * vx + delta_u * ux / 2 + delta_v * vx / 2, 
                          cu * uy + cv * vy + delta_u * uy / 2 + delta_v * vy / 2]
                 d += `\nL ${edge1[0]} ${edge1[1]} 
-                        A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
+                            A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
             }
         }
 
@@ -308,6 +323,7 @@ var macaroni = {
         path.setAttributeNS(null, "pointer-events", "none")
         color = won ? "#0000ff" : "#ff0000"
         path.setAttributeNS(null, "style", `fill:none;stroke:${color};stroke-width:5px`)
+
         path.setAttributeNS(null, "d", d)
 
         laser.appendChild(path)
@@ -340,6 +356,7 @@ var macaroni = {
                                  angle: ang,
                                  dead: false,
                                  checked: checked_points
+
                                }
                     }
                     if (angle == (hex[2] + 3) % 6){
@@ -361,15 +378,15 @@ var macaroni = {
             }
             checked_points.delete(`${coord_u} ${coord_v}`)
         }
-        return null
+        return {cu: null, checked: checked_points}
     },
 
     draw_grid: function(){
-        N = 50
+        const N = this.N()
 
         for(i of Array(N).keys()){
             for(j of Array(N).keys()){
-                this.draw_hex(i, j - parseInt(i / 2))
+                this.draw_hex(i+1, j - Math.floor(i / 2))
             }
         }
     },
@@ -383,6 +400,9 @@ var macaroni = {
         this.draw_line(hex[0][0] + cx, hex[1][0] + cx, hex[0][1] + cy, hex[1][1] + cy)
         this.draw_line(hex[1][0] + cx, hex[2][0] + cx, hex[1][1] + cy, hex[2][1] + cy)
         this.draw_line(hex[2][0] + cx, hex[3][0] + cx, hex[2][1] + cy, hex[3][1] + cy)
+        this.draw_line(hex[3][0] + cx, hex[4][0] + cx, hex[3][1] + cy, hex[4][1] + cy)
+        this.draw_line(hex[4][0] + cx, hex[5][0] + cx, hex[4][1] + cy, hex[5][1] + cy)
+        this.draw_line(hex[5][0] + cx, hex[0][0] + cx, hex[5][1] + cy, hex[0][1] + cy)
     },
 
     draw_line: function(x1, x2, y1, y2){
