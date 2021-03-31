@@ -34,7 +34,8 @@ var macaroni = {
         var last_click_time_ms = 0
         this.is_mobile = this.is_mobile_func()
         const svgbox = document.getElementById("svgbox_macaroni")
-        svgbox.setAttributeNS(null, "viewBox", this.is_mobile ? "0 0 550 450" : "0 0 1000 1000")
+        svgbox.setAttributeNS(null, "viewBox", 
+                    `0 0 ${this.size * (this.N() + 1) * Math.sqrt(3)} ${this.size * (this.N() + 1) * 1.5}`)
         
         this.draw_grid()
         this.spawn()
@@ -237,7 +238,7 @@ var macaroni = {
         var path = document.createElementNS("http://www.w3.org/2000/svg", "path")
         path.setAttributeNS(null, "class", "draggable path")
         path.setAttributeNS(null, "pointer-events", "none")
-        path.setAttributeNS(null, "style", `fill:#ffffff;stroke:#000000;stroke-width:3px`)
+        path.setAttributeNS(null, "style", `fill:#f7dfaf;stroke:#000000;stroke-width:1px`)
         path.setAttributeNS(null, "d", d)
 
         arc_element.appendChild(path)        
