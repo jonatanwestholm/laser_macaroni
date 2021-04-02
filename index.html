@@ -5,7 +5,7 @@
 </head>
 <body>
 <div>
-    <button onclick="macaroni.spawn_checkpoints()">Random Game</button>
+    <button onclick="macaroni.new_game('random')">Random Game</button>
     <svg id="svgbox_macaroni" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" 
          onload="macaroni.load()">
     </svg>
@@ -51,9 +51,10 @@ var macaroni = {
     load: function(){
         this.init_variables()        
         this.draw_grid()
-        this.spawn()
-        this.draw_laser()
+        this.new_game("random")
     },
+
+    // functions that are executed during a player action
 
     nothing: function(event){
         event.preventDefault()
@@ -164,40 +165,191 @@ var macaroni = {
         this.hexes[id][2] = (this.hexes[id][2] + delta_angle/60 + 6) % 6
     },
 
-    spawn: function(){
-        var num_120 = this.is_mobile ? 3 : 3
-        var num_60 = this.is_mobile ? 2 : 2
-      
-        for (i of Array(num_120).keys()){
-            this.svgbox.append(this.draw_tile(1, i+1, "small_arc"))
+    // functions that are executed at the end of a player action
+
+    draw_laser: function(){
+        this.flush_laser()
+
+        var ux = this.ux
+        var uy = this.uy
+        var vx = this.vx
+        var vy = this.vy
+        var cx = ux
+        var cy = uy
+        var size = this.size
+        var inf = 100
+
+        const laser = document.createElementNS("http://www.w3.org/2000/svg", "g")
+        laser.setAttributeNS(null, "id", "laser")
+        var d = `M ${cx} ${cy} `
+        var cu = 0
+        var cv = 0
+        var angle = 0
+        var won = false
+
+        checked_points = new Set(this.checkpoints)
+
+        while(true){
+            delta_u = this.angle2deltas[angle][0]
+            delta_v = this.angle2deltas[angle][1]
+            res = this.find_next_turn(cu, cv, delta_u, delta_v, angle, checked_points)
+            checked_points = res.checked
+            if (checked_points.size == 0 ){
+                won = true
+            }  
+            if (res.cu == null){
+                cu = cu + delta_u * inf
+                cv = cv + delta_v * inf
+                d += `\nL ${cu * ux + cv * vx} ${cu * uy + cv * vy}`
+                break
+            }            
+            cu = res.cu
+            cv = res.cv
+            edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
+                     cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
+            if ( res.arc_type == "small_arc" ){
+                sweep = res.angle == (angle + 4) % 6 ? 0 : 1
+            } else{
+                sweep = res.angle == (angle + 5) % 6 ? 0 : 1    
+            }
+            angle = res.angle
+            if(res.dead){
+                d += `\nL ${edge1[0]} ${edge1[1]}`
+                break
+            }else{
+                delta_u = this.angle2deltas[angle][0]
+                delta_v = this.angle2deltas[angle][1]
+                edge2 = [cu * ux + cv * vx + delta_u * ux / 2 + delta_v * vx / 2, 
+                         cu * uy + cv * vy + delta_u * uy / 2 + delta_v * vy / 2]
+                if (res.arc_type == "small_arc"){
+                    d += `\nL ${edge1[0]} ${edge1[1]} 
+                            A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
+                } else{
+                    d += `\nL ${edge1[0]} ${edge1[1]} 
+                            A ${1.5 * size} ${1.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`
+                }
+            }
         }
 
-        for (i of Array(num_60).keys()){
-            this.svgbox.append(this.draw_tile(1, num_120+i+1, "large_arc"))
-        }
+        var path = document.createElementNS("http://www.w3.org/2000/svg", "path")
+        path.setAttributeNS(null, "class", "path")
+        path.setAttributeNS(null, "class", "line")
+        path.setAttributeNS(null, "z-index", 0)
+        path.setAttributeNS(null, "pointer-events", "none")
+        color = won ? "#0000ff" : "#ff0000"
+        path.setAttributeNS(null, "style", `fill:none;stroke:${color};stroke-width:5px`)
 
-        this.spawn_checkpoints()
+        path.setAttributeNS(null, "d", d)
+
+        laser.appendChild(path)
+        this.svgbox.appendChild(laser) 
     },
 
-    spawn_checkpoints: function(){
-        this.flush_checkpoints()
-
-        var num_points = this.is_mobile ? 7 : 7
-        for (i of Array(num_points).keys()){
-            this.draw_checkpoint()
+    find_next_turn: function(cu, cv, delta_u, delta_v, angle, checked_points){
+        var iter = 0
+        while (cu >= 0 && cu + cv >= 0 && cu < 50 && cv < 50 && iter < this.N+2){
+            iter += 1
+            cu += delta_u
+            cv += delta_v
+            for (idx in this.hexes){
+                hex = this.hexes[idx]
+                if (hex[0] == cu && hex[1] == cv){
+                    var is_dead = false
+                    var arc = "small_arc"
+                    if (hex[3] == "small_arc" && angle == (hex[2] + 2) % 6){
+                        ang = (angle - 2 + 6) % 6
+                    } else if (hex[3] == "small_arc" && angle == (hex[2] + 3) % 6){
+                        ang = (angle + 2) % 6
+                    } else if (hex[3] == "large_arc" && angle == (hex[2] + 2) % 6){
+                        ang = (angle + 5) % 6
+                        arc = "large_arc"
+                    } else if (hex[3] == "large_arc" && angle == (hex[2] + 4) % 6){
+                        ang = (angle + 1) % 6
+                        arc = "large_arc"
+                    } else{
+                        ang = angle
+                        is_dead = true
+                    }
+                    return { cu: cu,
+                             cv: cv,
+                             angle: ang,
+                             dead: is_dead,
+                             checked: checked_points,
+                             arc_type: arc
+                           }   
+                }
+            }
+            checked_points.delete(`${cu} ${cv}`)
         }
-        this.draw_laser()
+        return {cu: null, checked: checked_points}
     },
 
-    draw_checkpoint: function(){
+    // functions that are executed at 'new_game()'
+
+    new_game: function(json){
+        var num_macaroni = this.is_mobile ? 3 : 3
+        var num_sedani = this.is_mobile ? 2 : 2
+        var num_checkpoints = this.is_mobile ? 7 : 7
         var width = this.is_mobile ? 6 : 7
         var margin = this.is_mobile ? 2 : 3
 
+        this.spawn_tiles(num_macaroni, num_sedani)
+        this.spawn_checkpoints(num_checkpoints, width, margin)
+        this.draw_laser()
+    },
+
+    spawn_tiles: function(num_macaroni, num_sedani){
+        this.flush_tiles()
+
+        for (i of Array(num_macaroni).keys()){
+            this.svgbox.append(this.draw_tile(1, i+1, "small_arc"))
+        }
+
+        for (i of Array(num_sedani).keys()){
+            this.svgbox.append(this.draw_tile(1, num_macaroni+i+1, "large_arc"))
+        }
+    },
+
+    spawn_checkpoints: function(num_checkpoints, width, margin){
+        this.flush_checkpoints()
+
+        for (i of Array(num_checkpoints).keys()){
+            this.draw_checkpoint(width, margin)
+        }
+    },
+
+
+    flush_tiles: function(){
+        var cps = document.getElementsByClassName('draggable hex')
+        const M = cps.length
+        for (var i = 0; i < M; i++){
+            this.svgbox.removeChild(cps.item(0))
+        }
+        this.hexes = []
+
+    },
+
+    flush_laser: function() {
+        laser = document.getElementById("laser")
+        if (laser){
+            this.svgbox.removeChild(laser)
+        }
+    },
+  
+    flush_checkpoints: function(){
+        var cps = document.getElementsByClassName('macaroni_checkpoint')
+        const M = cps.length
+        for (var i = 0; i < M; i++){
+            this.svgbox.removeChild(cps.item(0))
+        }
+        this.checkpoints = []
+    },
+
+    draw_checkpoint: function(width, margin){
         var cu = Math.floor(Math.random() * width) + margin
         var cv = Math.floor((Math.random() - cu / width / 2 ) * width ) + margin
         this.checkpoints.push(`${cu} ${cv}`)
 
-        //d = `cx=${cu * ux + cv * vx} cy=${cu * uy + cv * vy} r=5`
         point = document.createElementNS("http://www.w3.org/2000/svg", "circle")
         point.setAttributeNS(null, "style", `fill:#00ff00;stroke:#000000;stroke-width:0.1px`)
         point.setAttributeNS(null, "pointer-events", "none")
@@ -224,7 +376,7 @@ var macaroni = {
         svg.setAttributeNS(null, "v", coord.v)
 
         const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon")
-        polygon.setAttributeNS(null, "class", `drawable draggable polygon`)
+        polygon.setAttributeNS(null, "class", `draggable polygon`)
         polygon.setAttributeNS(null, "z-index", 1)
         polygon.setAttributeNS(null, "style", `fill:#cccccc;stroke:#000000;stroke-width:1px`)
         var cx = this.ux
@@ -294,138 +446,7 @@ var macaroni = {
                                                         ${hex[a][1] * 1/3 + hex[b][1] * 2/3 + cy} z`
     },
 
-    draw_laser: function(){
-        this.flush_laser()
-
-        var ux = this.ux
-        var uy = this.uy
-        var vx = this.vx
-        var vy = this.vy
-        var cx = ux
-        var cy = uy
-        var size = this.size
-        var inf = 100
-
-        const laser = document.createElementNS("http://www.w3.org/2000/svg", "g")
-        laser.setAttributeNS(null, "id", "laser")
-        var d = `M ${cx} ${cy} `
-        var cu = 0
-        var cv = 0
-        var angle = 0
-        var won = false
-
-        checked_points = new Set(this.checkpoints)
-
-        while(true){
-            delta_u = this.angle2deltas[angle][0]
-            delta_v = this.angle2deltas[angle][1]
-            res = this.find_next_turn(cu, cv, delta_u, delta_v, angle, checked_points)
-            checked_points = res.checked
-            if (checked_points.size == 0 ){
-                won = true
-            }  
-            if (res.cu == null){
-                cu = cu + delta_u * inf
-                cv = cv + delta_v * inf
-                d += `\nL ${cu * ux + cv * vx} ${cu * uy + cv * vy}`
-                break
-            }            
-            cu = res.cu
-            cv = res.cv
-            edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
-                     cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
-            if ( res.arc_type == "small_arc" ){
-                sweep = res.angle == (angle + 4) % 6 ? 0 : 1
-            } else{
-                sweep = res.angle == (angle + 5) % 6 ? 0 : 1    
-            }
-            angle = res.angle
-            if(res.dead){
-                d += `\nL ${edge1[0]} ${edge1[1]}`
-                break
-            }else{
-                delta_u = this.angle2deltas[angle][0]
-                delta_v = this.angle2deltas[angle][1]
-                edge2 = [cu * ux + cv * vx + delta_u * ux / 2 + delta_v * vx / 2, 
-                         cu * uy + cv * vy + delta_u * uy / 2 + delta_v * vy / 2]
-                if (res.arc_type == "small_arc"){
-                    d += `\nL ${edge1[0]} ${edge1[1]} 
-                            A ${0.5 * size} ${0.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`                    
-                } else{
-                    d += `\nL ${edge1[0]} ${edge1[1]} 
-                            A ${1.5 * size} ${1.5 * size} 0 0 ${sweep} ${edge2[0]} ${edge2[1]}`
-                }
-            }
-        }
-
-        var path = document.createElementNS("http://www.w3.org/2000/svg", "path")
-        path.setAttributeNS(null, "class", "path")
-        path.setAttributeNS(null, "class", "drawable line")
-        path.setAttributeNS(null, "z-index", 0)
-        path.setAttributeNS(null, "pointer-events", "none")
-        color = won ? "#0000ff" : "#ff0000"
-        path.setAttributeNS(null, "style", `fill:none;stroke:${color};stroke-width:5px`)
-
-        path.setAttributeNS(null, "d", d)
-
-        laser.appendChild(path)
-        this.svgbox.appendChild(laser) 
-    },
-
-    flush_laser: function() {
-        laser = document.getElementById("laser")
-        if (laser){
-            this.svgbox.removeChild(laser)
-        }
-    },
-  
-    flush_checkpoints: function(){
-        var cps = document.getElementsByClassName('macaroni_checkpoint')
-        const M = cps.length
-        for (var i = 0; i < M; i++){
-            this.svgbox.removeChild(cps.item(0))
-        }
-        this.checkpoints = []
-    },
-
-    find_next_turn: function(cu, cv, delta_u, delta_v, angle, checked_points){
-        var iter = 0
-        while (cu >= 0 && cu + cv >= 0 && cu < 50 && cv < 50 && iter < this.N+2){
-            iter += 1
-            cu += delta_u
-            cv += delta_v
-            for (idx in this.hexes){
-                hex = this.hexes[idx]
-                if (hex[0] == cu && hex[1] == cv){
-                    var is_dead = false
-                    var arc = "small_arc"
-                    if (hex[3] == "small_arc" && angle == (hex[2] + 2) % 6){
-                        ang = (angle - 2 + 6) % 6
-                    } else if (hex[3] == "small_arc" && angle == (hex[2] + 3) % 6){
-                        ang = (angle + 2) % 6
-                    } else if (hex[3] == "large_arc" && angle == (hex[2] + 2) % 6){
-                        ang = (angle + 5) % 6
-                        arc = "large_arc"
-                    } else if (hex[3] == "large_arc" && angle == (hex[2] + 4) % 6){
-                        ang = (angle + 1) % 6
-                        arc = "large_arc"
-                    } else{
-                        ang = angle
-                        is_dead = true
-                    }
-                    return { cu: cu,
-                             cv: cv,
-                             angle: ang,
-                             dead: is_dead,
-                             checked: checked_points,
-                             arc_type: arc
-                           }   
-                }
-            }
-            checked_points.delete(`${cu} ${cv}`)
-        }
-        return {cu: null, checked: checked_points}
-    },
+    // functions that are executed at 'load()'
 
     draw_grid: function(){
         const N = this.N
