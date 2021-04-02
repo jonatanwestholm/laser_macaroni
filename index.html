@@ -60,7 +60,7 @@ var macaroni = {
     },
 
     start_drag: function(event){
-        event.preventDefault();
+        event.preventDefault()
         if (event.target.classList.contains("draggable")){
 
             if (event.button == 1 || event.button == 2 || event.timeStamp < macaroni.last_click_time_ms + 350){
@@ -87,8 +87,8 @@ var macaroni = {
             coord = macaroni.hexgrid_rounding(coord.x, coord.y)
             macaroni.selected_tile.setAttributeNS(null, "x", parseInt(coord.x - macaroni.vx / 2 + 0.5))
             macaroni.selected_tile.setAttributeNS(null, "y", parseInt(coord.y - macaroni.uy + 0.5))
-            macaroni.selected_tile.setAttributeNS(null, "coord_u", coord.coord_u)
-            macaroni.selected_tile.setAttributeNS(null, "coord_v", coord.coord_v)
+            macaroni.selected_tile.setAttributeNS(null, "u", coord.u)
+            macaroni.selected_tile.setAttributeNS(null, "v", coord.v)
         }
     },
 
@@ -98,18 +98,20 @@ var macaroni = {
             if (macaroni.is_mobile){
                 coord = { x: macaroni.selected_tile.getAttributeNS(null, "x"),
                           y: macaroni.selected_tile.getAttributeNS(null, "y"),
-                          coord_u: macaroni.selected_tile.getAttributeNS(null, "coord_u"),
-                          coord_v: macaroni.selected_tile.getAttributeNS(null, "coord_v")
+                          u: macaroni.selected_tile.getAttributeNS(null, "u"),
+                          v: macaroni.selected_tile.getAttributeNS(null, "v")
                         }
             } else{
                 var coord = macaroni.get_mouse_position(event)
                 coord = macaroni.hexgrid_rounding(coord.x, coord.y)
+                /*
                 macaroni.selected_tile.setAttributeNS(null, "x", parseInt(coord.x - macaroni.vx / 2 + 0.5))
                 macaroni.selected_tile.setAttributeNS(null, "y", parseInt(coord.y - macaroni.uy + 0.5))
+                */
             }
             var id = parseInt(macaroni.selected_tile.getAttributeNS(null, "id"))
-            macaroni.hexes[id][0] = coord.coord_u
-            macaroni.hexes[id][1] = coord.coord_v
+            macaroni.hexes[id][0] = coord.u
+            macaroni.hexes[id][1] = coord.v
             macaroni.selected_tile = false
         }
         macaroni.draw_laser()
@@ -118,11 +120,31 @@ var macaroni = {
     get_mouse_position: function(event){
         var coord_x = this.is_mobile ? event.touches[0].clientX : event.x
         var coord_y = this.is_mobile ? event.touches[0].clientY : event.y
-        var CTM = this.svgbox.getScreenCTM();
+        var CTM = this.svgbox.getScreenCTM()
         return {
             x: (coord_x - CTM.e) / CTM.a,
             y: (coord_y - CTM.f) / CTM.d
         }
+    },
+
+    hexgrid_rounding: function(x, y){
+        // rounds x and y to the nearest hexagon center,
+        // using linear algebra
+        Ainv11 = 0 / this.size
+        Ainv12 = 2/3 / this.size
+        Ainv21 = 1/Math.sqrt(3) / this.size
+        Ainv22 = -1/3 / this.size
+
+        u = Math.floor( Ainv11 * x + Ainv12 * y + 0.5)
+        v = Math.floor( Ainv21 * x + Ainv22 * y + 0.5)
+
+        u = Math.min(this.N, Math.max(1, u))
+        v = Math.min(this.N - Math.floor(u/2 + 0.5), Math.max( -Math.floor(u/2 - 0.5), v))
+
+        return { x: u * this.ux + v * this.vx,
+                 y: u * this.uy + v * this.vy,
+                 u: u,
+                 v: v}
     },
 
     rotate: function(tile, clockwise){
@@ -140,34 +162,6 @@ var macaroni = {
         }
         id = parseInt(tile.getAttributeNS(null, "id"))
         this.hexes[id][2] = (this.hexes[id][2] + delta_angle/60 + 6) % 6
-    },
-
-    hexgrid_rounding: function(x, y){
-        // rounds x and y to the nearest hexagon center,
-        // using linear algebra
-        var vx = this.vx
-        var vy = this.vy
-        var ux = this.ux
-        var uy = this.uy
-        var size = this.size
-        var N = this.N
-
-        Ainv11 = 0 / size
-        Ainv12 = 2/3 / size
-        Ainv21 = 1/Math.sqrt(3) / size
-        Ainv22 = -1/3 / size
-
-        coord_u = Math.floor( Ainv11 * x + Ainv12 * y + 0.5)
-        coord_v = Math.floor( Ainv21 * x + Ainv22 * y + 0.5)
-
-        coord_u = Math.min(N, Math.max(1, coord_u))
-        coord_v = Math.min(N-Math.floor(coord_u/2 + 0.5), Math.max(-Math.floor(coord_u/2 - 0.5), coord_v))
-        //coord_u = Math.min(this.N, Math.max(0, coord_u))
-
-        return { x: coord_u * ux + coord_v * vx,
-                 y: coord_u * uy + coord_v * vy,
-                 coord_u: coord_u,
-                 coord_v: coord_v}
     },
 
     spawn: function(){
@@ -196,12 +190,6 @@ var macaroni = {
     },
 
     draw_checkpoint: function(){
-        var vx = this.vx
-        var vy = this.vy
-        var ux = this.ux
-        var uy = this.uy
-        var size = this.size
-
         var width = this.is_mobile ? 6 : 7
         var margin = this.is_mobile ? 2 : 3
 
@@ -214,8 +202,8 @@ var macaroni = {
         point.setAttributeNS(null, "style", `fill:#00ff00;stroke:#000000;stroke-width:0.1px`)
         point.setAttributeNS(null, "pointer-events", "none")
         point.setAttributeNS(null, "class", "macaroni_checkpoint")
-        point.setAttributeNS(null, "cx", cu * ux + cv * vx)
-        point.setAttributeNS(null, "cy", cu * uy + cv * vy)
+        point.setAttributeNS(null, "cx", cu * this.ux + cv * this.vx)
+        point.setAttributeNS(null, "cy", cu * this.uy + cv * this.vy)
         point.setAttributeNS(null, "r", 5)
         this.svgbox.appendChild(point)
     },
@@ -228,14 +216,12 @@ var macaroni = {
         svg.setAttributeNS(null, "id", id)
         const x = this.ux * i + this.vx * j
         const y = this.uy * i + this.vy * j
-        //svg.setAttributeNS(null, "x", x)
-        //svg.setAttributeNS(null, "y", y)
         svg.setAttributeNS(null, "x", parseInt(x - this.vx / 2 + 0.5))
         svg.setAttributeNS(null, "y", parseInt(y - this.uy + 0.5))
         coord = this.hexgrid_rounding(x, y)
-        this.hexes.push([coord.coord_u, coord_v, 0, arc_type])
-        svg.setAttributeNS(null, "coord_u", coord_u)
-        svg.setAttributeNS(null, "coord_v", coord_v)
+        this.hexes.push([coord.u, coord.v, 0, arc_type])
+        svg.setAttributeNS(null, "u", coord.u)
+        svg.setAttributeNS(null, "v", coord.v)
 
         const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon")
         polygon.setAttributeNS(null, "class", `drawable draggable polygon`)
@@ -348,7 +334,6 @@ var macaroni = {
             cv = res.cv
             edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
                      cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
-            //sweep = res.angle == (angle + 4) % 6 ? 0 : 1
             if ( res.arc_type == "small_arc" ){
                 sweep = res.angle == (angle + 4) % 6 ? 0 : 1
             } else{
@@ -395,25 +380,23 @@ var macaroni = {
     },
   
     flush_checkpoints: function(){
-        var cps = document.getElementsByClassName('macaroni_checkpoint');
+        var cps = document.getElementsByClassName('macaroni_checkpoint')
         const M = cps.length
         for (var i = 0; i < M; i++){
-            this.svgbox.removeChild(cps.item(0));
+            this.svgbox.removeChild(cps.item(0))
         }
         this.checkpoints = []
     },
 
     find_next_turn: function(cu, cv, delta_u, delta_v, angle, checked_points){
-        var coord_u = cu
-        var coord_v = cv
         var iter = 0
-        while (coord_u >= 0 && coord_u + coord_v >= 0 && coord_u < 50 && coord_v < 50 && iter < 100){
+        while (cu >= 0 && cu + cv >= 0 && cu < 50 && cv < 50 && iter < this.N+2){
             iter += 1
-            coord_u += delta_u
-            coord_v += delta_v
+            cu += delta_u
+            cv += delta_v
             for (idx in this.hexes){
                 hex = this.hexes[idx]
-                if (hex[0] == coord_u && hex[1] == coord_v){
+                if (hex[0] == cu && hex[1] == cv){
                     var is_dead = false
                     var arc = "small_arc"
                     if (hex[3] == "small_arc" && angle == (hex[2] + 2) % 6){
@@ -430,8 +413,8 @@ var macaroni = {
                         ang = angle
                         is_dead = true
                     }
-                    return { cu: coord_u,
-                             cv: coord_v,
+                    return { cu: cu,
+                             cv: cv,
                              angle: ang,
                              dead: is_dead,
                              checked: checked_points,
@@ -439,7 +422,7 @@ var macaroni = {
                            }   
                 }
             }
-            checked_points.delete(`${coord_u} ${coord_v}`)
+            checked_points.delete(`${cu} ${cv}`)
         }
         return {cu: null, checked: checked_points}
     },
@@ -469,13 +452,13 @@ var macaroni = {
     },
 
     draw_line: function(x1, x2, y1, y2){
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttributeNS(null, "x1", x1);
-        line.setAttributeNS(null, "x2", x2);
-        line.setAttributeNS(null, "y1", y1);
-        line.setAttributeNS(null, "y2", y2);
-        line.setAttributeNS(null, "style", "stroke:rgb(50, 50, 50);stroke-width:0.5");
-        this.svgbox.appendChild(line);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line")
+        line.setAttributeNS(null, "x1", x1)
+        line.setAttributeNS(null, "x2", x2)
+        line.setAttributeNS(null, "y1", y1)
+        line.setAttributeNS(null, "y2", y2)
+        line.setAttributeNS(null, "style", "stroke:rgb(50, 50, 50);stroke-width:0.5")
+        this.svgbox.appendChild(line)
     },
 }
 </script>
