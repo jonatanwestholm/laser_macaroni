@@ -9,6 +9,14 @@
     <svg id="svgbox_macaroni" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" 
          onload="macaroni.load()">
     </svg>
+    <textarea id="macaroni_settings" rows="4" cols="50">
+    </textarea>
+    <button onclick="macaroni.new_game('load')">load</button>
+</div>
+<div>
+    <button onclick="macaroni.previous_level()">previous</button>
+    <button id="macaroni_level">hello</button>
+    <button onclick="macaroni.next_level()">next</button>
 </div>
 <script type="text/javascript">
 var macaroni = {
@@ -18,6 +26,7 @@ var macaroni = {
         this.hexes = []
         this.checkpoints = []
         this.size = 30
+        this.level_num = -1
         this.vx = this.size * Math.sqrt(3)
         this.vy = this.size * 0
         this.ux = this.size * Math.sqrt(3)/2
@@ -30,7 +39,7 @@ var macaroni = {
 
         // presentation and listeners
         this.is_mobile = 'ontouchstart' in document.documentElement
-        this.N = this.is_mobile ? 10 : 15
+        this.N = this.is_mobile ? 12 : 12
         this.svgbox = document.getElementById("svgbox_macaroni")
         this.svgbox.setAttributeNS(null, "viewBox", `0 0 ${this.size * (this.N + 1) * Math.sqrt(3)} 
                                                          ${this.size * (this.N + 1) * 1.5}`)
@@ -46,12 +55,17 @@ var macaroni = {
         // movement
         this.selected_tile = false
         this.last_click_time_ms = 0
+
+        this.levels = [
+            '{"name":"medium","get_new_checkpoints":"false","num_macaroni":3,"num_sedani":2,"num_checkpoints":7,"width":6,"margin":2,"checkpoints":[[2,3], [3, 1], [4, 0], [4, 3], [6, 2], [7, 2], [7, 3]] }',
+            '{"name":"hard","get_new_checkpoints":"false","num_macaroni":3,"num_sedani":2,"num_checkpoints":7,"checkpoints":[[3, 1], [4, 1], [4, 2], [5, 3], [8, 1], [8, 2], [8, 4]] }'
+        ]
     },
 
     load: function(){
         this.init_variables()        
         this.draw_grid()
-        this.new_game("random")
+        this.next_level()
     },
 
     // functions that are executed during a player action
@@ -286,32 +300,63 @@ var macaroni = {
 
     // functions that are executed at 'new_game()'
 
-    new_game: function(settings){
-        if (settings == "random"){
-            settings = this.get_default_game()
+    new_game: function(source){
+        const default_settings = { 
+            num_macaroni: this.is_mobile ? 3 : 3,
+            num_sedani: this.is_mobile ? 2 : 2,
+            num_checkpoints: this.is_mobile ? 7 : 7,
+            width: this.is_mobile ? 6 : 6,
+            margin: this.is_mobile ? 2 : 2
         }
 
-        settings = JSON.parse(settings)
+        if (source == "load"){
+            settings = JSON.parse(document.getElementById("macaroni_settings").value)
+        }else if (source == "random"){
+            settings = {name: "random",
+                        get_new_checkpoints: "true"}
+        }else{
+            settings = JSON.parse(source)
+        }
+
+        settings.num_macaroni = settings.num_macaroni === undefined ? default_settings.num_macaroni : settings.num_macaroni
+        settings.num_sedani = settings.num_sedani === undefined ? default_settings.num_sedani : settings.num_sedani
+        settings.num_checkpoints = settings.num_checkpoints === undefined ? default_settings.num_checkpoints : settings.num_checkpoints
+        settings.width = settings.width === undefined ? default_settings.width : settings.width
+        settings.margin = settings.margin === undefined ? default_settings.margin : settings.margin
+        if(!settings.checkpoints 
+            || settings.get_new_checkpoints == "true"){
+            settings.checkpoints = this.get_random_checkpoints(
+                                            settings.num_checkpoints,
+                                            settings.width,
+                                            settings.margin
+                                        )
+        }
+
+        // here: print to text box
+        document.getElementById("macaroni_settings").value = JSON.stringify(settings)
 
         this.spawn_tiles(settings.num_macaroni, settings.num_sedani)
         this.spawn_checkpoints(settings.checkpoints)
         this.draw_laser()
     },
 
-    get_default_game(){
-        const num_macaroni = this.is_mobile ? 3 : 3
-        const num_sedani = this.is_mobile ? 2 : 2
+    next_level: function(){
+        this.level_num = (this.level_num + 1) % this.levels.length
+        this.new_game(this.get_level())
+    },
 
-        const num_checkpoints = this.is_mobile ? 7 : 7
-        const width = this.is_mobile ? 6 : 7
-        const margin = this.is_mobile ? 2 : 3
+    previous_level: function(){
+        this.level_num = (this.level_num - 1 + this.levels.length) % this.levels.length
+        this.new_game(this.get_level())
+    },
 
-        // package this as json, then use default values
-        const points = this.get_random_checkpoints(num_checkpoints, width, margin)
-
-        return JSON.stringify({num_macaroni: num_macaroni,
-                               num_sedani: num_sedani,
-                               checkpoints: points })
+    get_level: function(){
+        const text = `level ${this.level_num+1}/${this.levels.length}`
+        //console.log(text)
+        console.log(document.getElementById("macaroni_level"))
+        document.getElementById("macaroni_level").innerText = text
+        console.log(document.getElementById("macaroni_level"))
+        return this.levels[this.level_num]
     },
 
     get_random_checkpoints: function(num_checkpoints, width, margin){
@@ -344,7 +389,6 @@ var macaroni = {
             this.draw_checkpoint(checkpoints[i][0], checkpoints[i][1])
         }
     },
-
 
     flush_tiles: function(){
         var cps = document.getElementsByClassName('draggable hex')
