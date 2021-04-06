@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Laser Macaroni</title>
+    <title>Donut Macaroni</title>
 </head>
 <body>
 <div>
@@ -214,10 +214,13 @@ var macaroni = {
         var cv = 0
         var angle = 0
         var won = false
+        var iter = 0
+        const max_iter = this.checkpoints.length * 3
 
         checked_points = new Set(this.checkpoints)
 
-        while(true){
+        while(iter < max_iter){
+            iter += 1
             delta_u = this.angle2deltas[angle][0]
             delta_v = this.angle2deltas[angle][1]
             res = this.find_next_turn(cu, cv, delta_u, delta_v, angle, checked_points)
@@ -244,6 +247,17 @@ var macaroni = {
             if(res.dead){
                 d += `\nL ${edge1[0]} ${edge1[1]}`
                 break
+            }else if(res.arc_type == "line"){
+                d += `\nL ${edge1[0]} ${edge1[1]} `
+                offset_u = 1
+                cu = (cu - offset_u + this.N) % this.N + offset_u                
+                offset_v = parseInt(-Math.floor(cu/2 - 0.5))
+                cv = (cv - offset_v + this.N) % this.N + offset_v
+                edge2 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
+                         cu * uy + cv * vy - delta_u * uy / 2 - delta_v * vy / 2]
+                d += `\nM ${edge2[0]} ${edge2[1]} `
+                cu -= delta_u
+                cv -= delta_v
             }else{
                 delta_u = this.angle2deltas[angle][0]
                 delta_v = this.angle2deltas[angle][1]
@@ -274,9 +288,15 @@ var macaroni = {
     },
 
     find_next_turn: function(cu, cv, delta_u, delta_v, angle, checked_points){
+        // wrap around
+        const max_iter = 2*this.N
         var iter = 0
-        while (cu >= 0 && cu + cv >= 0 && cu < 50 && cv < 50 && iter < this.N+2){
+        var a = 0
+        //while (cu >= 0 && cu + cv >= 0 && cu < 50 && cv < 50 && iter < this.N+2){
+        //console.log(-Math.floor(cu/2 - 0.5))
+        do {
             iter += 1
+            //cu = (cu + delta_u + this.N) % this.N
             cu += delta_u
             cv += delta_v
             for (idx in this.hexes){
@@ -308,8 +328,20 @@ var macaroni = {
                 }
             }
             checked_points.delete(`${cu} ${cv}`)
+        a = -Math.floor(cu/2 - 0.5)
+        } while (cu >= 1 && cu <= this.N && cv >= a && cv <= this.N - 1 + a && iter < max_iter)
+
+        if (iter == max_iter){
+            return {cu: null, checked: checked_points}
+        }else{
+            return { cu: cu,
+                     cv: cv,
+                     angle: angle,
+                     dead: false,
+                     checked: checked_points,
+                     arc_type: "line"
+                   }   
         }
-        return {cu: null, checked: checked_points}
     },
 
     // functions that are executed at 'new_game()'
