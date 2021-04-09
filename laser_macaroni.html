@@ -314,13 +314,15 @@ var macaroni = {
             checked_points = res.checked
             if (checked_points.size == 0 ){
                 won = true
-            }  
+            }
+            /*
             if (res.cu == null){
                 cu = cu + delta_u * inf
                 cv = cv + delta_v * inf
                 d += `\nL ${cu * ux + cv * vx} ${cu * uy + cv * vy}`
                 break
-            }            
+            }
+            */           
             cu = res.cu
             cv = res.cv
             edge1 = [cu * ux + cv * vx - delta_u * ux / 2 - delta_v * vx / 2, 
@@ -418,17 +420,20 @@ var macaroni = {
         a = -Math.floor(cu/2 - 0.5)
         } while (cu >= 1 && cu <= this.N && cv >= a && cv <= this.N - 1 + a && iter < max_iter)
 
-        if (iter == max_iter){
-            return {cu: null, checked: checked_points}
-        }else{
-            return { cu: cu,
-                     cv: cv,
-                     angle: angle,
-                     dead: this.wrap == "finite" ? true : false,
-                     checked: checked_points,
-                     arc_type: "line"
-                   }   
+        var is_dead = false
+        if(iter >= max_iter){
+            is_dead = true
+        }else if (this.wrap == "finite"){
+            is_dead = true
         }
+        
+        return { cu: cu,
+                 cv: cv,
+                 angle: angle,
+                 dead: is_dead,
+                 checked: checked_points,
+                 arc_type: "line"
+               }   
     },
 
     // functions that are executed at 'new_game()'
