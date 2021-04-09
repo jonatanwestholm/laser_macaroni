@@ -337,7 +337,7 @@ var macaroni = {
             return { cu: cu,
                      cv: cv,
                      angle: angle,
-                     dead: false,
+                     dead: this.wrap == "finite" ? true : false,
                      checked: checked_points,
                      arc_type: "line"
                    }   
@@ -352,7 +352,8 @@ var macaroni = {
             num_sedani: this.is_mobile ? 2 : 2,
             num_checkpoints: this.is_mobile ? 7 : 7,
             width: this.is_mobile ? 6 : 6,
-            margin: this.is_mobile ? 2 : 2
+            margin: this.is_mobile ? 2 : 2,
+            wrap: "finite"
         }
 
         if (source == "load"){
@@ -370,6 +371,7 @@ var macaroni = {
         settings.num_sedani = settings.num_sedani === undefined ? default_settings.num_sedani : settings.num_sedani
         settings.num_checkpoints = settings.num_checkpoints === undefined ? default_settings.num_checkpoints : settings.num_checkpoints
         settings.width = settings.width === undefined ? default_settings.width : settings.width
+        settings.wrap = settings.wrap === undefined ? default_settings.wrap : settings.wrap
         settings.margin = settings.margin === undefined ? default_settings.margin : settings.margin
         if(!settings.checkpoints 
             || settings.get_new_checkpoints == "true"){
@@ -379,6 +381,8 @@ var macaroni = {
                                             settings.margin
                                         )
         }
+
+        this.wrap = settings.wrap
 
         // here: print to text box
         document.getElementById("macaroni_settings").value = JSON.stringify(settings)
