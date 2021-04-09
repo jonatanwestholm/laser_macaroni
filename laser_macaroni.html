@@ -420,13 +420,17 @@ var macaroni = {
         a = -Math.floor(cu/2 - 0.5)
         } while (cu >= 1 && cu <= this.N && cv >= a && cv <= this.N - 1 + a && iter < max_iter)
 
-        var is_dead = false
+        var is_dead
         if(iter >= max_iter){
             is_dead = true
         }else if (this.wrap == "finite"){
             is_dead = true
+        }else if (this.wrap == "torus"){
+            is_dead = false
+        }else if (this.wrap == "cylinder"){
+            is_dead = !(cu >= 1 && cu <= this.N)
         }
-        
+
         return { cu: cu,
                  cv: cv,
                  angle: angle,
@@ -461,7 +465,7 @@ var macaroni = {
 
         settings.num_macaroni = settings.num_macaroni === undefined ? default_settings.num_macaroni : settings.num_macaroni
         settings.num_sedani = settings.num_sedani === undefined ? default_settings.num_sedani : settings.num_sedani
-        allowed_wraps = ["finite", "torus", "cylinder", "mobius"]
+        allowed_wraps = ["finite", "torus", "cylinder"]
         if (!allowed_wraps.includes(settings.wrap)){
             settings.wrap = default_settings.wrap
         }
