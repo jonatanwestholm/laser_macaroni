@@ -12,6 +12,29 @@
     </textarea>
     <button onclick="macaroni.new_game('load')">load</button>
 </div>
+<div>
+    <ul id="howto_text" style="display:none">
+      <li>Make the <span style="color:#a00">laser</span> go through all the <span style="color:#0a0">checkpoints</span> to win. The laser turns <span style="color:#00c">blue</span> when the puzzle is solved.</li>
+      <li>A checkpoint with a tile on top of it does not count as checked, even if the laser goes through the <span style="color:#b7950b">macaroni</span> on the tile.</li>
+      <li>To rotate tiles, use <b>double tap</b>, mouse wheel click, or <b>right click</b>. On desktop, holding shift rotates tiles counterclockwise.</li>
+      <li>The 'code' text is the definition of a level. It can be copied, pasted, and modified.</li>
+    </ul>
+    <button onclick="howto()" id="howto" style="border:none;">how to &#9660;</button>
+</div>
+<script>
+function howto() {
+  var howto_text = document.getElementById("howto_text");
+  var button_text = document.getElementById("howto");
+
+  if (howto_text.style.display === "none") {
+    button_text.innerHTML = "how to &#9650;"
+    howto_text.style.display = "block"
+  } else {
+    button_text.innerHTML = "how to &#9660;"
+    howto_text.style.display = "none"
+  }
+}
+</script>
 <script type="text/javascript">
 var macaroni = {
 
